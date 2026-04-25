@@ -50,6 +50,13 @@ spec:
       containers:
         - name: auth-db
           image: postgres:16-alpine
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "150m"
+              memory: "256Mi"
           args: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", "-c", "hot_standby=on"]
           env:
             - name: POSTGRES_DB
@@ -113,6 +120,10 @@ spec:
       initContainers:
         - name: fix-permissions
           image: busybox
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
           command: ["sh", "-c", "chown -R 999:999 /var/lib/postgresql/data"]
           volumeMounts:
             - name: auth-db-replica-data
@@ -121,6 +132,13 @@ spec:
       containers:
         - name: auth-db-replica
           image: postgres:16-alpine
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "150m"
+              memory: "256Mi"
           securityContext: { runAsUser: 999 }
           command:
             - sh
@@ -211,6 +229,13 @@ spec:
       containers:
         - name: chat-db
           image: postgres:16-alpine
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "150m"
+              memory: "256Mi"
           args: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", "-c", "hot_standby=on"]
           env:
             - name: POSTGRES_DB
@@ -274,6 +299,10 @@ spec:
       initContainers:
         - name: fix-permissions
           image: busybox
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
           command: ["sh", "-c", "chown -R 999:999 /var/lib/postgresql/data"]
           volumeMounts:
             - name: chat-db-replica-data
@@ -282,6 +311,13 @@ spec:
       containers:
         - name: chat-db-replica
           image: postgres:16-alpine
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "150m"
+              memory: "256Mi"
           securityContext: { runAsUser: 999 }
           command:
             - sh
