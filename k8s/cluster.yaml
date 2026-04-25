@@ -1,0 +1,22 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: groupsapp-cluster
+  region: us-east-1
+  version: "1.34"
+
+# Aquí le decimos que use el rol pre-existente del laboratorio
+iam:
+  serviceRoleARN: "arn:aws:iam::849194575776:role/LabRole"
+
+managedNodeGroups:
+  - name: standard-nodes
+    instanceType: t3.medium
+    minSize: 1
+    maxSize: 3
+    desiredCapacity: 2
+    # El rol para las instancias EC2 también debe ser el LabRole
+    iam:
+      instanceRoleARN: "arn:aws:iam::849194575776:role/LabRole"
+      

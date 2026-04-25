@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-grpc
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-grpc
+  template:
+    metadata:
+      labels:
+        app: user-grpc
+    spec:
+      containers:
+        - name: user-grpc
+          image: user-grpc:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 50051
+          env:
+            - name: USER_GRPC_ADDR
+              value: ":50051"
+            - name: USER_DB_PATH
+              value: "/data/auth.db"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: JWT_SECRET
+          volumeMounts:
+            - name: auth-db
+              mountPath: /data
+      volumes:
+        - name: auth-db
+          hostPath:
+            path: /tmp/groupsapp-auth
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-grpc
+  namespace: groupsapp
+spec:
+  selector:
+    app: user-grpc
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+  type: ClusterIP

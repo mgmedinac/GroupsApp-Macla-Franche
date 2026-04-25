@@ -1,0 +1,30 @@
+services:
+  user-grpc:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: user-grpc
+    environment:
+      USER_GRPC_ADDR: ":50051"
+      USER_DB_PATH: "/data/auth.db"
+      JWT_SECRET: "super_secret_jwt_key"
+    volumes:
+      - ../services/auth/auth.db:/data/auth.db
+    ports:
+      - "50051:50051"
+
+  chat-grpc:
+    build:
+      context: .
+      dockerfile: chat-service/Dockerfile
+    container_name: chat-grpc
+    environment:
+      CHAT_GRPC_ADDR: ":50052"
+      CHAT_DB_PATH: "/data/chat.db"
+      USER_GRPC_ADDR: "user-grpc:50051"
+    volumes:
+      - ../services/chat/chat.db:/data/chat.db
+    depends_on:
+      - user-grpc
+    ports:
+      - "50052:50052"

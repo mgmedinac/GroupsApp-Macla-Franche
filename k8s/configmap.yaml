@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: groupsapp-config
+  namespace: groupsapp
+data:
+  AUTH_SERVICE_URL: "http://auth-service"
+  CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080"
+  PRESENCE_TIMEOUT_SECONDS: "45"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_QUEUE: "domain_events"
+  RABBITMQ_MAX_RETRIES: "10"
+  RABBITMQ_INITIAL_BACKOFF_SECONDS: "0.5"
+  RABBITMQ_MAX_BACKOFF_SECONDS: "5"

@@ -1,0 +1,321 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-db-init
+  namespace: groupsapp
+data:
+  00-replication-pg-hba.sh: |
+    #!/usr/bin/env sh
+    set -eu
+    echo "host replication replicator 0.0.0.0/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
+    echo "host replication replicator ::/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
+  01-replication-user.sql: |
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'replicator') THEN
+        CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'replicator_pass';
+      END IF;
+    END
+    $$;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auth-db-pvc
+  namespace: groupsapp
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-db
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-db
+  template:
+    metadata:
+      labels:
+        app: auth-db
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: auth-db
+          image: postgres:16-alpine
+          args: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", "-c", "hot_standby=on"]
+          env:
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: AUTH_DB_NAME } }
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: AUTH_DB_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: AUTH_DB_PASSWORD } }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: auth-db-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: auth-db-init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: auth-db-data
+          persistentVolumeClaim: { claimName: auth-db-pvc }
+        - name: auth-db-init
+          configMap: { name: auth-db-init, defaultMode: 0755 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-db
+  namespace: groupsapp
+spec:
+  selector: { app: auth-db }
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auth-db-replica-pvc
+  namespace: groupsapp
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-db-replica
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-db-replica
+  template:
+    metadata:
+      labels:
+        app: auth-db-replica
+    spec:
+      securityContext:
+        fsGroup: 999
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 999:999 /var/lib/postgresql/data"]
+          volumeMounts:
+            - name: auth-db-replica-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+      containers:
+        - name: auth-db-replica
+          image: postgres:16-alpine
+          securityContext: { runAsUser: 999 }
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -s "$PGDATA/PG_VERSION" ]; then
+                until pg_isready -h auth-db -p 5432; do echo "waiting for primary"; sleep 2; done
+                rm -rf "$PGDATA"/*
+                pg_basebackup -h auth-db -D "$PGDATA" -U replicator -Fp -Xs -P -R
+              fi
+              chmod 700 "$PGDATA"
+              exec postgres
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: PGPASSWORD
+              value: "replicator_pass"
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: AUTH_DB_USER } }
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: AUTH_DB_NAME } }
+          volumeMounts:
+            - name: auth-db-replica-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+      volumes:
+        - name: auth-db-replica-data
+          persistentVolumeClaim: { claimName: auth-db-replica-pvc }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-db-replica
+  namespace: groupsapp
+spec:
+  selector: { app: auth-db-replica }
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chat-db-init
+  namespace: groupsapp
+data:
+  00-replication-pg-hba.sh: |
+    #!/usr/bin/env sh
+    set -eu
+    echo "host replication replicator 0.0.0.0/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
+    echo "host replication replicator ::/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
+  01-replication-user.sql: |
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'replicator') THEN
+        CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'replicator_pass';
+      END IF;
+    END
+    $$;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chat-db-pvc
+  namespace: groupsapp
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-db
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-db
+  template:
+    metadata:
+      labels:
+        app: chat-db
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: chat-db
+          image: postgres:16-alpine
+          args: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", "-c", "hot_standby=on"]
+          env:
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: CHAT_DB_NAME } }
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: CHAT_DB_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: CHAT_DB_PASSWORD } }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: chat-db-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: chat-db-init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: chat-db-data
+          persistentVolumeClaim: { claimName: chat-db-pvc }
+        - name: chat-db-init
+          configMap: { name: chat-db-init, defaultMode: 0755 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-db
+  namespace: groupsapp
+spec:
+  selector: { app: chat-db }
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chat-db-replica-pvc
+  namespace: groupsapp
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-db-replica
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-db-replica
+  template:
+    metadata:
+      labels:
+        app: chat-db-replica
+    spec:
+      securityContext:
+        fsGroup: 999
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 999:999 /var/lib/postgresql/data"]
+          volumeMounts:
+            - name: chat-db-replica-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+      containers:
+        - name: chat-db-replica
+          image: postgres:16-alpine
+          securityContext: { runAsUser: 999 }
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -s "$PGDATA/PG_VERSION" ]; then
+                until pg_isready -h chat-db -p 5432; do echo "waiting for primary"; sleep 2; done
+                rm -rf "$PGDATA"/*
+                pg_basebackup -h chat-db -D "$PGDATA" -U replicator -Fp -Xs -P -R
+              fi
+              chmod 700 "$PGDATA"
+              exec postgres
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: PGPASSWORD
+              value: "replicator_pass"
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: CHAT_DB_USER } }
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: groupsapp-secret, key: CHAT_DB_NAME } }
+          volumeMounts:
+            - name: chat-db-replica-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+      volumes:
+        - name: chat-db-replica-data
+          persistentVolumeClaim: { claimName: chat-db-replica-pvc }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-db-replica
+  namespace: groupsapp
+spec:
+  selector: { app: chat-db-replica }
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]

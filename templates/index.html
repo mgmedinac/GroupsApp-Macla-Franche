@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GroupsApp - Chat de Grupos</title>
+    <link rel="stylesheet" href="/static/styles.css?v=9">
+</head>
+<body>
+    <div class="contenedor">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>GroupsApp</h1>
+                </div>
+                <div id="usuario-sesion" class="usuario-sesion oculto"></div>
+            </div>
+        </header>
+
+        <section id="seccion-autenticacion" class="tarjeta">
+            <div id="vista-login">
+                <h2>Iniciar sesión</h2>
+                <form id="form-login">
+                    <label>Usuario</label>
+                    <input type="text" id="login-username" required>
+                    <label>Contraseña</label>
+                    <input type="password" id="login-password" required>
+                    <button type="submit">Entrar</button>
+                </form>
+                <div id="login-error" class="login-error oculto" role="alert"></div>
+                <p class="texto-ayuda">¿No tienes cuenta? <button id="boton-mostrar-registro" class="link">Regístrate</button></p>
+            </div>
+
+            <div id="vista-registro" class="oculto">
+                <h2>Registro</h2>
+                <form id="form-registro">
+                    <label>Usuario</label>
+                    <input type="text" id="register-username" required>
+                    <label>Contraseña</label>
+                    <input type="password" id="register-password" required>
+                    <button type="submit">Registrar</button>
+                </form>
+                <p class="texto-ayuda">¿Ya tienes cuenta? <button id="boton-mostrar-login" class="link">Inicia sesión</button></p>
+            </div>
+        </section>
+
+        <section id="seccion-grupos" class="tarjeta oculto">
+            <div class="barra-superior">
+                <h2>Mis grupos</h2>
+                <button id="boton-logout" class="boton-secundario">Cerrar sesión</button>
+            </div>
+            <div class="crear-grupo">
+                <input type="text" id="nuevo-grupo-nombre" placeholder="Nombre del nuevo grupo">
+                <button id="boton-crear-grupo">Crear grupo</button>
+            </div>
+            <div class="panel-contactos">
+                <div class="barra-superior compacta">
+                    <h3>Mis contactos</h3>
+                </div>
+                <div class="crear-contacto">
+                    <input type="text" id="nuevo-contacto-username" placeholder="Agregar contacto por usuario">
+                    <button id="boton-agregar-contacto">Agregar contacto</button>
+                </div>
+                <div id="lista-contactos"></div>
+            </div>
+            <div id="lista-grupos"></div>
+        </section>
+
+        <section id="seccion-chat" class="tarjeta oculto">
+            <div class="barra-superior">
+                <button id="boton-regresar" class="boton-secundario">← Volver</button>
+                <div>
+                    <h2 id="titulo-grupo">Chat del grupo</h2>
+                    <p id="administrador-grupo" class="texto-pequeno"></p>
+                </div>
+            </div>
+            <div id="info-miembros" class="tarjeta-pequena"></div>
+            <div id="mensajes-contenedor" class="chat-contenedor"></div>
+            <button id="boton-mensajes-nuevos" class="boton-secundario oculto">Ir a mensajes nuevos</button>
+            <form id="form-mensaje" class="form-mensaje">
+                <input type="text" id="mensaje-texto" placeholder="Escribe un mensaje...">
+                <input type="file" id="mensaje-archivo">
+                <button type="submit">Enviar</button>
+            </form>
+            <div class="agregar-miembro">
+                <input type="text" id="nuevo-miembro-username" placeholder="Agregar miembro por usuario">
+                <button id="boton-agregar-miembro">Agregar miembro</button>
+            </div>
+        </section>
+
+        <section id="seccion-chat-privado" class="tarjeta oculto">
+            <div class="barra-superior">
+                <button id="boton-privado-regresar" class="boton-secundario">← Volver</button>
+                <div>
+                    <h2 id="titulo-contacto">Chat privado</h2>
+                    <p id="estado-contacto" class="texto-pequeno"></p>
+                </div>
+            </div>
+            <div id="mensajes-privados-contenedor" class="chat-contenedor"></div>
+            <button id="boton-privados-mensajes-nuevos" class="boton-secundario oculto">Ir a mensajes nuevos</button>
+            <form id="form-mensaje-privado" class="form-mensaje">
+                <input type="text" id="mensaje-privado-texto" placeholder="Escribe un mensaje privado...">
+                <input type="file" id="mensaje-privado-archivo">
+                <button type="submit">Enviar</button>
+            </form>
+        </section>
+
+        <div id="alerta" class="alerta oculto"></div>
+    </div>
+
+    <div id="imagen-modal" class="imagen-modal oculto" aria-hidden="true">
+        <div id="imagen-modal-overlay" class="imagen-modal-overlay"></div>
+        <div class="imagen-modal-contenido">
+            <button id="imagen-modal-cerrar" class="imagen-modal-cerrar" aria-label="Cerrar vista previa">×</button>
+            <img id="imagen-modal-img" src="" alt="Vista previa de imagen">
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=9"></script>
+</body>
+</html>

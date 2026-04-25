@@ -1,0 +1,244 @@
+services:
+  auth-db:
+    image: postgres:16-alpine
+    container_name: auth-db
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - hot_standby=on
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: replicator_pass
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+      - ./infra/postgres/auth-primary/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  auth-db-replica:
+    image: postgres:16-alpine
+    container_name: auth-db-replica
+    user: postgres
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: replicator_pass
+      PGPASSWORD: replicator_pass
+    command: >
+      sh -c "
+      if [ ! -s $$PGDATA/PG_VERSION ]; then
+        rm -rf $$PGDATA/*;
+        pg_basebackup -h auth-db -D $$PGDATA -U $$POSTGRES_REPLICATION_USER -Fp -Xs -P -R;
+      fi;
+      chmod 700 $$PGDATA;
+      exec postgres
+      "
+    volumes:
+      - auth_db_replica_data:/var/lib/postgresql/data
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  chat-db:
+    image: postgres:16-alpine
+    container_name: chat-db
+    environment:
+      POSTGRES_DB: chat_db
+      POSTGRES_USER: chat_user
+      POSTGRES_PASSWORD: chat_pass
+    volumes:
+      - chat_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  web-frontend:
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    container_name: web-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      file-service:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  auth-service:
+    build:
+      context: ./services/auth
+    container_name: auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      SECRET_KEY: super_secret_auth_key
+      JWT_SECRET: super_secret_jwt_key
+      PRESENCE_TIMEOUT_SECONDS: 45
+      DB_DSN: postgresql://auth_user:auth_pass@auth-db:5432/auth_db?sslmode=disable
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8001/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  chat-service:
+    build:
+      context: ./services/chat
+    container_name: chat-service
+    ports:
+      - "8002:8002"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8001
+      DB_DSN: postgresql://chat_user:chat_pass@chat-db:5432/chat_db?sslmode=disable
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8002/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+
+  file-service:
+    build:
+      context: ./services/file
+    container_name: file-service
+    ports:
+      - "8003:8003"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8001
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_QUEUE: domain_events
+      RABBITMQ_MAX_RETRIES: 10
+      RABBITMQ_INITIAL_BACKOFF_SECONDS: 0.5
+      RABBITMQ_MAX_BACKOFF_SECONDS: 5
+    volumes:
+      - file_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8003/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  user-grpc:
+    build:
+      context: ./grpc
+      dockerfile: user-service/Dockerfile
+    container_name: user-grpc
+    environment:
+      USER_GRPC_ADDR: ":50053"
+      USER_DB_DSN: "postgres://auth_user:auth_pass@auth-db:5432/auth_db?sslmode=disable"
+      JWT_SECRET: super_secret_jwt_key
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 50053 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    ports:
+      - "50053:50053"
+
+  chat-grpc:
+    build:
+      context: ./grpc
+      dockerfile: chat-service/Dockerfile
+    container_name: chat-grpc
+    environment:
+      CHAT_GRPC_ADDR: ":50051"
+      CHAT_DB_DSN: "postgres://chat_user:chat_pass@chat-db:5432/chat_db?sslmode=disable"
+      USER_GRPC_ADDR: "user-grpc:50053"
+      USER_GRPC_MAX_RETRIES: 12
+      USER_GRPC_INITIAL_BACKOFF_MS: 500
+      USER_GRPC_MAX_BACKOFF_MS: 5000
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 50051 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      user-grpc:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+    ports:
+      - "50051:50051"
+
+volumes:
+  rabbitmq_data:
+  auth_db_data:
+  auth_db_replica_data:
+  chat_db_data:
+  file_uploads:

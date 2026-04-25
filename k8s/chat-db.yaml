@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-db-replica
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-db-replica
+  template:
+    metadata:
+      labels:
+        app: chat-db-replica
+    spec:
+      # fsGroup asegura que el volumen sea propiedad del GID 999
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: "Always"
+
+      containers:
+        - name: chat-db-replica
+          image: postgres:16-alpine
+          
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          # Usamos una variable PGDATA que apunte a un subdirectorio 
+          # para evitar conflictos de permisos con la raíz del montaje del PVC.
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: REPLICATION_USER
+            - name: REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: REPLICATION_PASSWORD
+
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              
+              echo "🧹 Preparando directorio de datos..."
+              mkdir -p "$PGDATA"
+              # Limpiar solo el contenido del subdirectorio
+              rm -rf "$PGDATA"/*
+
+              echo "⏳ Esperando a que el primario esté listo..."
+              until pg_isready -h chat-db.groupsapp.svc.cluster.local -p 5432 -U "$REPLICATION_USER"; do
+                sleep 2
+              done
+
+              echo "📦 Iniciando pg_basebackup..."
+              PGPASSWORD="$REPLICATION_PASSWORD" pg_basebackup \
+                -h chat-db.groupsapp.svc.cluster.local \
+                -D "$PGDATA" \
+                -U "$REPLICATION_USER" \
+                -v -P --wal-method=stream
+
+              echo "⚙️ Configurando archivos de réplica..."
+              # Configuración de conexión al primario
+              echo "primary_conninfo = 'host=chat-db.groupsapp.svc.cluster.local port=5432 user=$REPLICATION_USER password=$REPLICATION_PASSWORD'" >> "$PGDATA/postgresql.auto.conf"
+              
+              # Crear señal de standby para PostgreSQL 12+
+              touch "$PGDATA/standby.signal"
+
+              echo "🔧 Ajustando permisos finales (estrictos)..."
+              chmod 700 "$PGDATA"
+
+              echo "🚀 Iniciando PostgreSQL..."
+              exec postgres -D "$PGDATA"
+
+          volumeMounts:
+            - name: chat-db-replica-data
+              mountPath: /var/lib/postgresql/data
+
+      volumes:
+        - name: chat-db-replica-data
+          persistentVolumeClaim:
+            claimName: chat-db-replica-pvc

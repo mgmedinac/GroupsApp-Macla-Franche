@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-service
+  template:
+    metadata:
+      labels:
+        app: chat-service
+    spec:
+      initContainers:
+        - name: wait-chat-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z chat-db 5432; do echo waiting for chat-db; sleep 2; done"]
+        # Añadimos RabbitMQ que es vital para la comunicación
+        - name: wait-rabbitmq
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 2; done"]
+      containers:
+        - name: chat-service
+          image: 849194575776.dkr.ecr.us-east-1.amazonaws.com/groupsapp/chat-service:v2026.04.24-1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8002
+          env:
+            # Añadimos las llaves para que pueda validar sesiones
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: SECRET_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: JWT_SECRET
+            - name: AUTH_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: groupsapp-config
+                  key: AUTH_SERVICE_URL
+            - name: DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: CHAT_DB_DSN
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: groupsapp-config
+                  key: CORS_ORIGINS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+  namespace: groupsapp
+spec:
+  selector:
+    app: chat-service
+  ports:
+    - name: http
+      port: 80         
+      targetPort: 8002 
+  type: LoadBalancer

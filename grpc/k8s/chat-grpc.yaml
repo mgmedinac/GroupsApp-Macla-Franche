@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-grpc
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-grpc
+  template:
+    metadata:
+      labels:
+        app: chat-grpc
+    spec:
+      containers:
+        - name: chat-grpc
+          image: chat-grpc:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 50052
+          env:
+            - name: CHAT_GRPC_ADDR
+              value: ":50052"
+            - name: CHAT_DB_PATH
+              value: "/data/chat.db"
+            - name: USER_GRPC_ADDR
+              value: "user-grpc:50051"
+          volumeMounts:
+            - name: chat-db
+              mountPath: /data
+      volumes:
+        - name: chat-db
+          hostPath:
+            path: /tmp/groupsapp-chat
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-grpc
+  namespace: groupsapp
+spec:
+  selector:
+    app: chat-grpc
+  ports:
+    - name: grpc
+      port: 50052
+      targetPort: 50052
+  type: ClusterIP

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chat-db-pvc
+  namespace: groupsapp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # En EKS, 'gp2' es el estándar por defecto para discos SSD rápidos
+  storageClassName: gp2 
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      initContainers:
+        - name: wait-auth-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z auth-db 5432; do echo waiting for auth-db; sleep 2; done"]
+        - name: wait-rabbitmq
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 2; done"]
+      containers:
+        - name: auth-service
+          # 1. Tu imagen de ECR (849194575776 es tu ID de cuenta)
+          image: 849194575776.dkr.ecr.us-east-1.amazonaws.com/auth-service:v2026.04.24-1
+          # 2. Obligatorio Always para descargar de ECR
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8001
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: SECRET_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: JWT_SECRET
+            - name: DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: AUTH_DB_DSN
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: groupsapp-config
+                  key: CORS_ORIGINS
+            - name: PRESENCE_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: groupsapp-config
+                  key: PRESENCE_TIMEOUT_SECONDS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: groupsapp
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - name: http
+      port: 80         # Cambiado a 8 para que sea la URL estándar
+      targetPort: 8001 # Tu puerto interno de Flask
+  # 3. LoadBalancer crea el link público de Amazon (ELB)
+  type: LoadBalancer

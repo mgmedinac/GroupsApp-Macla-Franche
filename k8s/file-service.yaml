@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-service
+  namespace: groupsapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: file-service
+  template:
+    metadata:
+      labels:
+        app: file-service
+    spec:
+      initContainers:
+        - name: wait-auth-service
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z auth-service 80; do echo waiting for auth-service; sleep 2; done"]
+        - name: wait-rabbitmq
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 2; done"]
+      containers:
+        - name: file-service
+          image: 849194575776.dkr.ecr.us-east-1.amazonaws.com/file-service:v2026.04.24-1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8003
+          env:
+            # --- CORRECCIÓN DE RABBITMQ ---
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672" 
+            # ------------------------------
+            - name: AUTH_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: groupsapp-config
+                  key: AUTH_SERVICE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: SECRET_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: groupsapp-secret
+                  key: JWT_SECRET
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: groupsapp-config
+                  key: CORS_ORIGINS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-service
+  namespace: groupsapp
+spec:
+  selector:
+    app: file-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8003
+  type: LoadBalancer
