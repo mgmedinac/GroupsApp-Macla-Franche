@@ -61,13 +61,58 @@ header p {
 }
 
 .usuario-sesion {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
     border-radius: 999px;
-    border: 1px solid rgba(31, 111, 255, 0.35);
-    background: rgba(31, 111, 255, 0.08);
+    border: 1px solid rgba(172, 199, 255, 0.7);
+    background: linear-gradient(160deg, rgba(242, 248, 255, 0.98) 0%, rgba(229, 241, 255, 0.92) 100%);
     color: var(--primary-strong);
     padding: 10px 16px;
     font-weight: 800;
     white-space: nowrap;
+    min-width: 190px;
+}
+
+.usuario-sesion-etiqueta {
+    font-size: 0.72rem;
+    color: var(--text-soft);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.usuario-sesion-nombre {
+    font-size: 0.98rem;
+}
+
+.usuario-sesion-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.usuario-sesion-estado::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #a4afbf;
+}
+
+.usuario-sesion-estado.online {
+    color: var(--ok);
+}
+
+.usuario-sesion-estado.online::before {
+    background: var(--ok);
+}
+
+.usuario-sesion-estado.offline {
+    color: #7f8b9f;
 }
 
 .tarjeta {
@@ -130,8 +175,8 @@ button {
     font-weight: 800;
     cursor: pointer;
     color: #ffffff;
-    background: linear-gradient(160deg, var(--primary) 0%, var(--primary-strong) 100%);
-    box-shadow: 0 10px 18px rgba(18, 86, 212, 0.28);
+    background: linear-gradient(160deg, #bbd4ff 0%, #9fc1ff 100%);
+    box-shadow: 0 10px 18px rgba(96, 136, 205, 0.24);
     transition: transform 0.16s ease, filter 0.16s ease;
 }
 
@@ -145,8 +190,9 @@ button:active {
 }
 
 button.boton-secundario {
-    background: linear-gradient(160deg, #5d6e86 0%, #425166 100%);
-    box-shadow: 0 10px 18px rgba(66, 81, 102, 0.28);
+    background: linear-gradient(160deg, #d8e6f6 0%, #c7d7ea 100%);
+    color: #31465d;
+    box-shadow: 0 10px 18px rgba(102, 127, 160, 0.2);
 }
 
 .link {
@@ -227,6 +273,30 @@ button.boton-secundario {
     min-width: 110px;
     padding: 9px 10px;
     box-shadow: 0 8px 14px rgba(19, 34, 56, 0.16);
+}
+
+.grupo-acciones .accion-abrir-chat {
+    color: #1f3f3f;
+    background: linear-gradient(160deg, #bfeae3 0%, #a8ddd5 100%);
+    box-shadow: 0 8px 14px rgba(84, 149, 139, 0.28);
+}
+
+.grupo-acciones .accion-editar-grupo {
+    color: #4a3f1b;
+    background: linear-gradient(160deg, #ffe8b8 0%, #ffd9a0 100%);
+    box-shadow: 0 8px 14px rgba(186, 144, 73, 0.26);
+}
+
+.grupo-acciones .accion-eliminar-grupo {
+    color: #5f2430;
+    background: linear-gradient(160deg, #ffcfd5 0%, #f9b7c0 100%);
+    box-shadow: 0 8px 14px rgba(177, 99, 117, 0.28);
+}
+
+.grupo-acciones .accion-chat-privado {
+    color: #2c355b;
+    background: linear-gradient(160deg, #d5dbff 0%, #c0c9fb 100%);
+    box-shadow: 0 8px 14px rgba(102, 115, 182, 0.27);
 }
 
 .tarjeta-pequena {
@@ -400,12 +470,12 @@ button.boton-secundario {
     right: 16px;
     bottom: 16px;
     z-index: 1100;
-    background: #18263d;
+    background: linear-gradient(160deg, #1e2f4a 0%, #334a67 100%);
     color: #f6fbff;
     border-radius: 12px;
-    border: 1px solid #2a3f63;
+    border: 1px solid #3b567b;
     padding: 12px 14px;
-    box-shadow: 0 14px 28px rgba(24, 38, 61, 0.35);
+    box-shadow: 0 14px 28px rgba(24, 38, 61, 0.28);
 }
 
 .imagen-modal {
@@ -475,6 +545,20 @@ button.boton-secundario {
     font-size: 14px;
 }
 
+.miembro-nombre {
+    font-weight: 800;
+}
+
+.contacto-presencia {
+    margin: 6px 0 0;
+}
+
+.miembro-item .estado-presencia,
+.contacto-presencia .estado-presencia {
+    min-width: 122px;
+    white-space: nowrap;
+}
+
 .status-online {
     color: #22c55e;
     font-size: 16px;
@@ -488,17 +572,18 @@ button.boton-secundario {
 .boton-eliminar-miembro {
     margin-left: auto;
     padding: 4px 12px;
-    background: var(--danger);
-    color: white;
+    background: linear-gradient(160deg, #ffd7dc 0%, #ffbec8 100%);
+    color: #5f2430;
     border: none;
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
-    transition: background 0.2s;
+    box-shadow: 0 6px 10px rgba(177, 99, 117, 0.24);
+    transition: filter 0.2s;
 }
 
 .boton-eliminar-miembro:hover {
-    background: #c02f2f;
+    filter: brightness(0.97);
 }
 
 @media (max-width: 860px) {

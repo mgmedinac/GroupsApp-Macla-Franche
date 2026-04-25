@@ -54,8 +54,13 @@ let intervaloPresencia = null;
 let intervaloGrupos = null;
 let ultimoMensajeId = null;
 let ultimoMensajePrivadoId = null;
+let ultimaFirmaMensajesGrupo = '';
+let ultimaFirmaMensajesPrivados = '';
 let accessToken = localStorage.getItem('access_token');
+let usuarioSesionOnline = false;
 let presenciaOfflineNotificada = false;
+const HEARTBEAT_INTERVAL_MS = 15000;
+const PRESENCE_UI_REFRESH_MS = 7000;
 
 // Bases relativas: sin fallback a localhost cuando no hay configuración global.
 const GATEWAY_BASE = (window.API_GATEWAY_BASE || '').replace(/\/$/, '');
@@ -65,6 +70,77 @@ const FILE_API_BASE = `${GATEWAY_BASE}/file`;
 
 function construirUrl(base, ruta) {
     return `${base}${ruta}`;
+}
+
+function esMismoId(idA, idB) {
+    return Number(idA) === Number(idB);
+}
+
+function obtenerFirmaMensajes(mensajes) {
+    if (!Array.isArray(mensajes)) return '';
+    return mensajes
+        .map((msg) => [
+            msg.id,
+            msg.status || '',
+            msg.content || '',
+            msg.file_url || '',
+            msg.user_id ?? msg.sender_id ?? '',
+            msg.username || ''
+        ].join(':'))
+        .join('|');
+}
+
+function estadoPresenciaTexto(online) {
+    return online ? 'En línea' : 'Desconectado';
+}
+
+function formatearPresencia(online) {
+    const clase = online ? 'online' : 'offline';
+    return `<span class="estado-presencia ${clase}" data-presence-state><span class="punto-presencia ${clase}"></span><span class="estado-presencia-texto">${estadoPresenciaTexto(online)}</span></span>`;
+}
+
+function actualizarNodoPresencia(nodo, online) {
+    if (!nodo) return;
+    const clase = online ? 'online' : 'offline';
+    nodo.classList.remove('online', 'offline');
+    nodo.classList.add(clase);
+    const punto = nodo.querySelector('.punto-presencia');
+    if (punto) {
+        punto.classList.remove('online', 'offline');
+        punto.classList.add(clase);
+    }
+    const texto = nodo.querySelector('.estado-presencia-texto');
+    if (texto) {
+        texto.textContent = estadoPresenciaTexto(online);
+    }
+}
+
+function actualizarListaContactosPresencia(contactos) {
+    if (!listaContactos || !Array.isArray(contactos)) return false;
+    let actualizado = false;
+
+    contactos.forEach((contacto) => {
+        const item = listaContactos.querySelector(`[data-contact-id="${contacto.id}"]`);
+        if (!item) return;
+        actualizarNodoPresencia(item.querySelector('[data-presence-state]'), !!contacto.online);
+        actualizado = true;
+    });
+
+    return actualizado;
+}
+
+function actualizarListaMiembrosPresencia(miembros) {
+    if (!infoMiembros || !Array.isArray(miembros)) return false;
+    let actualizado = false;
+
+    miembros.forEach((miembro) => {
+        const item = infoMiembros.querySelector(`[data-member-id="${miembro.id}"]`);
+        if (!item) return;
+        actualizarNodoPresencia(item.querySelector('[data-presence-state]'), !!miembro.online);
+        actualizado = true;
+    });
+
+    return actualizado;
 }
 
 function construirHeaders(extraHeaders = {}) {
@@ -145,10 +221,15 @@ function mostrarLoginRegistro() {
 
 function mostrarUsuarioSesion() {
     if (usuarioActual) {
-        usuarioSesion.textContent = `Conectado como ${usuarioActual}`;
+        const estadoSesion = usuarioSesionOnline ? 'Conectado' : 'Desconectado';
+        usuarioSesion.innerHTML = `
+            <span class="usuario-sesion-etiqueta">Cuenta activa</span>
+            <span class="usuario-sesion-nombre">@${usuarioActual}</span>
+            <span class="usuario-sesion-estado ${usuarioSesionOnline ? 'online' : 'offline'}">${estadoSesion}</span>
+        `;
         usuarioSesion.classList.remove('oculto');
     } else {
-        usuarioSesion.textContent = '';
+        usuarioSesion.innerHTML = '';
         usuarioSesion.classList.add('oculto');
     }
 }
@@ -190,12 +271,6 @@ function ocultarBotonMensajesNuevos() { botonMensajesNuevos?.classList.add('ocul
 function mostrarBotonMensajesNuevos() { botonMensajesNuevos?.classList.remove('oculto'); }
 function ocultarBotonPrivadosMensajesNuevos() { botonPrivadosMensajesNuevos?.classList.add('oculto'); }
 function mostrarBotonPrivadosMensajesNuevos() { botonPrivadosMensajesNuevos?.classList.remove('oculto'); }
-
-function formatearPresencia(contacto) {
-    const estado = contacto.online ? 'En línea' : 'Desconectado';
-    const clase = contacto.online ? 'online' : 'offline';
-    return `<span class="estado-presencia ${clase}"><span class="punto-presencia ${clase}"></span>${estado}</span>`;
-}
 
 function construirPrevisualizacionArchivo(rutaArchivo) {
     if (!rutaArchivo) return '';
@@ -308,9 +383,9 @@ async function cargarGrupos() {
                 <h3>${grupo.name}</h3>
                 <p class="texto-pequeno">Admin: ${grupo.admin_username || 'N/A'}</p>
                 <div class="grupo-acciones">
-                    <button class="boton-secundario" data-id="${grupo.id}">Abrir chat</button>
-                    ${grupo.admin_id === usuarioActualId ? `<button class="boton-secundario" data-edit-id="${grupo.id}">Editar</button>` : ''}
-                    ${grupo.admin_id === usuarioActualId ? `<button class="boton-secundario" data-delete-id="${grupo.id}">Eliminar</button>` : ''}
+                    <button class="boton-secundario accion-abrir-chat" data-id="${grupo.id}">Abrir chat</button>
+                    ${esMismoId(grupo.admin_id, usuarioActualId) ? `<button class="boton-secundario accion-editar-grupo" data-edit-id="${grupo.id}">Editar</button>` : ''}
+                    ${esMismoId(grupo.admin_id, usuarioActualId) ? `<button class="boton-secundario accion-eliminar-grupo" data-delete-id="${grupo.id}">Eliminar</button>` : ''}
                 </div>`;
             item.querySelector('[data-id]')?.addEventListener('click', () => abrirGrupo(grupo));
             item.querySelector('[data-edit-id]')?.addEventListener('click', () => editarGrupo(grupo));
@@ -378,9 +453,14 @@ async function eliminarGrupo(grupo) {
 
 async function eliminarMiembroGrupo(memberId) {
     if (!grupoActivo) return;
+    const memberIdNumber = Number(memberId);
+    if (!Number.isFinite(memberIdNumber)) {
+        mostrarAlerta('Id de miembro inválido.');
+        return;
+    }
     
     try {
-        await peticionJSON(CHAT_API_BASE, `/api/groups/${grupoActivo.id}/members/${memberId}`, {
+        await peticionJSON(CHAT_API_BASE, `/api/groups/${grupoActivo.id}/members/${memberIdNumber}`, {
             method: 'DELETE'
         });
         await cargarMiembrosGrupo();
@@ -399,14 +479,21 @@ async function cargarMiembrosGrupo() {
         return;
     }
 
-    const esAdmin = grupoActivo.admin_id === usuarioActualId;
+    const esAdmin = esMismoId(grupoActivo.admin_id, usuarioActualId);
+    if (inputNuevoMiembro) inputNuevoMiembro.disabled = !esAdmin;
+    if (botonAgregarMiembro) botonAgregarMiembro.disabled = !esAdmin;
+    if (inputNuevoMiembro) {
+        inputNuevoMiembro.placeholder = esAdmin
+            ? 'Agregar miembro por usuario'
+            : 'Solo el administrador puede gestionar miembros';
+    }
+
     infoMiembros.innerHTML = '<div class="miembros-lista">' + datos.members
         .map((member) => {
-            const indicador = member.online ? '<span class="status-online">●</span>' : '<span class="status-offline">●</span>';
-            const botonEliminar = esAdmin && member.id !== usuarioActualId 
+            const botonEliminar = esAdmin && !esMismoId(member.id, usuarioActualId)
                 ? `<button class="boton-eliminar-miembro" data-member-id="${member.id}" data-member-username="${member.username}">Eliminar</button>` 
                 : '';
-            return `<div class="miembro-item">${indicador} ${member.username} ${member.online ? '(en linea)' : '(desconectado)'} ${botonEliminar}</div>`;
+            return `<div class="miembro-item" data-member-id="${member.id}"><span class="miembro-nombre">${member.username}</span>${formatearPresencia(member.online)}${botonEliminar}</div>`;
         })
         .join('') + '</div>';
     
@@ -434,11 +521,12 @@ async function cargarContactos() {
     datos.contacts.forEach(contacto => {
         const item = document.createElement('div');
         item.className = 'lista-grupos-item';
+        item.dataset.contactId = String(contacto.id);
         item.innerHTML = `
             <h3>${contacto.username}</h3>
-            <p class="texto-pequeno">${contacto.online ? 'En linea' : 'Desconectado'}</p>
+            <p class="texto-pequeno contacto-presencia">${formatearPresencia(contacto.online)}</p>
             <div class="grupo-acciones">
-                <button class="boton-secundario" data-contact-id="${contacto.id}">Chat privado</button>
+                <button class="boton-secundario accion-chat-privado" data-contact-id="${contacto.id}">Chat privado</button>
             </div>
         `;
         item.querySelector('[data-contact-id]')?.addEventListener('click', () => abrirChatPrivado(contacto));
@@ -468,6 +556,7 @@ async function abrirGrupo(grupo) {
     grupoActivo = grupo;
     tipoConversacion = 'group';
     ultimoMensajeId = null;
+    ultimaFirmaMensajesGrupo = '';
     mostrarSeccionChat();
     tituloGrupo.textContent = `Chat: ${grupo.name}`;
     administradorGrupo.textContent = `Administrador: ${grupo.admin_username || 'N/A'}`;
@@ -480,6 +569,9 @@ async function abrirGrupo(grupo) {
 async function cargarMensajes() {
     if (!grupoActivo) return;
     const datos = await peticionJSON(CHAT_API_BASE, `/api/groups/${grupoActivo.id}/messages`);
+    const firmaMensajes = obtenerFirmaMensajes(datos.messages);
+    if (firmaMensajes === ultimaFirmaMensajesGrupo) return;
+    ultimaFirmaMensajesGrupo = firmaMensajes;
     const scrollAlFinal = estaEnElFondo(mensajesContenedor);
     mensajesContenedor.innerHTML = '';
 
@@ -493,8 +585,8 @@ async function cargarMensajes() {
         }
 
         const item = document.createElement('div');
-        item.className = `mensaje-item ${msg.user_id === usuarioActualId ? 'mensaje-enviado' : 'mensaje-recibido'}`;
-        item.innerHTML = `<strong>${msg.username}</strong><p>${msg.content || ''}</p>${construirPrevisualizacionArchivo(msg.file_url)}${msg.user_id === usuarioActualId ? construirEstadoMensaje(msg) : ''}`;
+        item.className = `mensaje-item ${esMismoId(msg.user_id, usuarioActualId) ? 'mensaje-enviado' : 'mensaje-recibido'}`;
+        item.innerHTML = `<strong>${msg.username}</strong><p>${msg.content || ''}</p>${construirPrevisualizacionArchivo(msg.file_url)}${esMismoId(msg.user_id, usuarioActualId) ? construirEstadoMensaje(msg) : ''}`;
         mensajesContenedor.appendChild(item);
     });
 
@@ -560,8 +652,9 @@ async function abrirChatPrivado(contacto) {
     contactoActivo = contacto;
     tipoConversacion = 'private';
     ultimoMensajePrivadoId = null;
+    ultimaFirmaMensajesPrivados = '';
     tituloContacto.textContent = `Chat con ${contacto.username}`;
-    estadoContacto.textContent = contacto.online ? 'En linea' : 'Desconectado';
+    estadoContacto.textContent = estadoPresenciaTexto(contacto.online);
     mostrarSeccionChatPrivado();
 
     if (intervaloMensajes) {
@@ -576,6 +669,9 @@ async function cargarMensajesPrivados() {
     if (!contactoActivo) return;
 
     const datos = await peticionJSON(CHAT_API_BASE, `/api/direct-messages/${contactoActivo.id}`);
+    const firmaMensajes = obtenerFirmaMensajes(datos.messages);
+    if (firmaMensajes === ultimaFirmaMensajesPrivados) return;
+    ultimaFirmaMensajesPrivados = firmaMensajes;
     const scrollAlFinal = estaEnElFondo(mensajesPrivadosContenedor);
     mensajesPrivadosContenedor.innerHTML = '';
 
@@ -589,8 +685,8 @@ async function cargarMensajesPrivados() {
         }
 
         const item = document.createElement('div');
-        item.className = `mensaje-item ${msg.sender_id === usuarioActualId ? 'mensaje-enviado' : 'mensaje-recibido'}`;
-        item.innerHTML = `<strong>${msg.username}</strong><p>${msg.content || ''}</p>${construirPrevisualizacionArchivo(msg.file_url)}${msg.sender_id === usuarioActualId ? construirEstadoMensaje(msg) : ''}`;
+        item.className = `mensaje-item ${esMismoId(msg.sender_id, usuarioActualId) ? 'mensaje-enviado' : 'mensaje-recibido'}`;
+        item.innerHTML = `<strong>${msg.username}</strong><p>${msg.content || ''}</p>${construirPrevisualizacionArchivo(msg.file_url)}${esMismoId(msg.sender_id, usuarioActualId) ? construirEstadoMensaje(msg) : ''}`;
         mensajesPrivadosContenedor.appendChild(item);
     });
 
@@ -633,12 +729,95 @@ async function enviarMensajePrivado(event) {
 function volverDesdeChatPrivado() {
     contactoActivo = null;
     tipoConversacion = null;
+    ultimaFirmaMensajesPrivados = '';
     if (intervaloMensajes) {
         clearInterval(intervaloMensajes);
         intervaloMensajes = null;
     }
     mostrarSeccionGrupos();
     Promise.all([cargarGrupos(), cargarContactos()]).catch(() => {});
+}
+
+async function enviarHeartbeat(suppressError = true) {
+    if (!accessToken) return;
+    await peticionJSON(CHAT_API_BASE, '/api/presence/heartbeat', {
+        method: 'POST',
+        suppressError,
+    });
+    usuarioSesionOnline = true;
+    mostrarUsuarioSesion();
+}
+
+async function marcarPresenciaOffline() {
+    if (!accessToken || presenciaOfflineNotificada) return;
+    presenciaOfflineNotificada = true;
+    try {
+        await fetch(construirUrl(CHAT_API_BASE, '/api/presence/offline'), {
+            method: 'POST',
+            headers: construirHeaders(),
+            keepalive: true,
+        });
+    } catch {
+        // No-op
+    }
+        usuarioSesionOnline = false;
+        mostrarUsuarioSesion();
+}
+
+async function sincronizarEstadoPresenciaUI() {
+    if (!accessToken) return;
+
+    if (tipoConversacion === 'group' && grupoActivo) {
+        const datos = await peticionJSON(CHAT_API_BASE, `/api/groups/${grupoActivo.id}/members`, { suppressError: true });
+        if (!Array.isArray(datos.members)) return;
+        if (!actualizarListaMiembrosPresencia(datos.members)) {
+            await cargarMiembrosGrupo();
+        }
+        return;
+    }
+
+    if (tipoConversacion === 'private' && contactoActivo) {
+        const datos = await peticionJSON(CHAT_API_BASE, '/api/contacts', { suppressError: true });
+        if (!Array.isArray(datos.contacts)) return;
+        const actualizado = datos.contacts.find(c => esMismoId(c.id, contactoActivo.id));
+        if (actualizado) {
+            contactoActivo = actualizado;
+            estadoContacto.textContent = estadoPresenciaTexto(actualizado.online);
+        }
+        actualizarListaContactosPresencia(datos.contacts);
+        return;
+    }
+
+    await Promise.all([cargarGrupos(), cargarContactos()]);
+}
+
+function detenerSincronizacionEstado() {
+    if (intervaloPresencia) {
+        clearInterval(intervaloPresencia);
+        intervaloPresencia = null;
+    }
+    if (intervaloGrupos) {
+        clearInterval(intervaloGrupos);
+        intervaloGrupos = null;
+    }
+}
+
+function iniciarSincronizacionEstado() {
+    detenerSincronizacionEstado();
+    presenciaOfflineNotificada = false;
+
+    if (!accessToken) return;
+
+    enviarHeartbeat(true).catch(() => {});
+    sincronizarEstadoPresenciaUI().catch(() => {});
+
+    intervaloPresencia = setInterval(() => {
+        enviarHeartbeat(true).catch(() => {});
+    }, HEARTBEAT_INTERVAL_MS);
+
+    intervaloGrupos = setInterval(() => {
+        sincronizarEstadoPresenciaUI().catch(() => {});
+    }, PRESENCE_UI_REFRESH_MS);
 }
 
 // Autenticación
@@ -657,9 +836,13 @@ async function iniciarSesion(event) {
         localStorage.setItem('access_token', accessToken);
         usuarioActual = datos.user.username;
         usuarioActualId = datos.user.id;
+        usuarioSesionOnline = true;
+        ultimaFirmaMensajesGrupo = '';
+        ultimaFirmaMensajesPrivados = '';
         mostrarUsuarioSesion();
         mostrarSeccionGrupos();
         await Promise.all([cargarGrupos(), cargarContactos()]);
+        iniciarSincronizacionEstado();
     } catch (e) {
         mostrarErrorLogin('Credenciales inválidas');
     }
@@ -709,9 +892,22 @@ inputNuevoMiembro?.addEventListener('keydown', (event) => {
 botonMostrarRegistro?.addEventListener('click', mostrarVistaRegistro);
 botonMostrarLogin?.addEventListener('click', mostrarVistaLogin);
 botonRegresar?.addEventListener('click', mostrarSeccionGrupos);
-botonLogout?.addEventListener('click', () => {
+botonLogout?.addEventListener('click', async () => {
+    detenerSincronizacionEstado();
+    await marcarPresenciaOffline();
     localStorage.clear();
     location.reload();
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && accessToken) {
+        enviarHeartbeat(true).catch(() => {});
+        sincronizarEstadoPresenciaUI().catch(() => {});
+    }
+});
+
+window.addEventListener('beforeunload', () => {
+    marcarPresenciaOffline().catch(() => {});
 });
 
 // Inicialización
@@ -720,8 +916,13 @@ if (accessToken) {
         .then(datos => {
             usuarioActual = datos.user.username;
             usuarioActualId = datos.user.id;
+            usuarioSesionOnline = !!datos.user.online;
+            ultimaFirmaMensajesGrupo = '';
+            ultimaFirmaMensajesPrivados = '';
+            mostrarUsuarioSesion();
             mostrarSeccionGrupos();
             Promise.all([cargarGrupos(), cargarContactos()]);
+            iniciarSincronizacionEstado();
         })
         .catch(() => mostrarLoginRegistro());
 } else {
