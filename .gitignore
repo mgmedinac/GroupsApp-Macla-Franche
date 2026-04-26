@@ -32,3 +32,6 @@ build/
 
 # Otros
 *.swp
+
+# archivos db 
+*.db

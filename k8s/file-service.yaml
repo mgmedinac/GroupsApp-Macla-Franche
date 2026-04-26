@@ -1,3 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: file-uploads-pvc
+  namespace: groupsapp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2 # <-- Esto es lo que arregla el "Pending"
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,12 +40,10 @@ spec:
           ports:
             - containerPort: 8003
           env:
-            # --- CORRECCIÓN DE RABBITMQ ---
             - name: RABBITMQ_HOST
               value: "rabbitmq"
             - name: RABBITMQ_PORT
               value: "5672" 
-            # ------------------------------
             - name: AUTH_SERVICE_URL
               valueFrom:
                 configMapKeyRef:
@@ -53,6 +64,11 @@ spec:
                 configMapKeyRef:
                   name: groupsapp-config
                   key: CORS_ORIGINS
+          # --- SOLO AÑADIMOS ESTO PARA EL DISCO ---
+          volumeMounts:
+            - name: file-storage
+              mountPath: /app/uploads
+          # ----------------------------------------
           readinessProbe:
             httpGet:
               path: /health
@@ -65,6 +81,12 @@ spec:
               port: 8003
             initialDelaySeconds: 20
             periodSeconds: 15
+      # --- Y ESTO PARA CONECTAR EL DISCO ---
+      volumes:
+        - name: file-storage
+          persistentVolumeClaim:
+            claimName: file-uploads-pvc
+      # -------------------------------------
 ---
 apiVersion: v1
 kind: Service
