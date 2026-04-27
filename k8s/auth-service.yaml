@@ -23,7 +23,7 @@ spec:
       containers:
         - name: auth-service
           # 1. Tu imagen de ECR (849194575776 es tu ID de cuenta)
-          image: 849194575776.dkr.ecr.us-east-1.amazonaws.com/auth-service:v2026.04.24-1
+          image: 849194575776.dkr.ecr.us-east-1.amazonaws.com/auth-service:latest
           # 2. Obligatorio Always para descargar de ECR
           imagePullPolicy: Always
           ports:
@@ -77,7 +77,7 @@ spec:
     app: auth-service
   ports:
     - name: http
-      port: 80         # Cambiado a 8 para que sea la URL estándar
-      targetPort: 8001 # Tu puerto interno de Flask
-  # 3. LoadBalancer crea el link público de Amazon (ELB)
+      port: 80         
+      targetPort: 8001 
+  
   type: LoadBalancer

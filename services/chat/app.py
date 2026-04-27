@@ -442,32 +442,32 @@ def list_group_members(group_id):
 def remove_group_member(group_id, member_id):
 	user = g.current_user
 
-	# Verify user is group admin
+	
 	if not is_group_admin(group_id, user['id']):
 		return jsonify({'error': 'Solo el administrador puede eliminar miembros.'}), 403
 
-	# Prevent admin from removing themselves
+	
 	if member_id == user['id']:
 		return jsonify({'error': 'El administrador no puede eliminarse a sí mismo.'}), 400
 
 	connection = get_db_connection()
 	cursor = connection.cursor(cursor_factory=RealDictCursor)
 
-	# Verify group exists
+	
 	cursor.execute('SELECT id FROM groups WHERE id = %s', (group_id,))
 	group_row = cursor.fetchone()
 	if group_row is None:
 		connection.close()
 		return jsonify({'error': 'Grupo no encontrado.'}), 404
 
-	# Verify member exists in group
+	
 	cursor.execute('SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s', (group_id, member_id))
 	member_row = cursor.fetchone()
 	if member_row is None:
 		connection.close()
 		return jsonify({'error': 'Miembro no encontrado en el grupo.'}), 404
 
-	# Remove member from group
+	
 	cursor.execute('DELETE FROM group_members WHERE group_id = %s AND user_id = %s', (group_id, member_id))
 	connection.commit()
 	connection.close()

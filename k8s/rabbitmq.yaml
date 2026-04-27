@@ -15,19 +15,12 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:3-management-alpine # La versión Alpine es más flexible
+          image: rabbitmq:3-management-alpine 
           ports:
             - containerPort: 5672
             - containerPort: 15672
           env:
             - name: RABBITMQ_DEFAULT_USER
-              value: "guest" # Usa valores directos para probar rápido si los secretos fallan
+              value: "guest" 
             - name: RABBITMQ_DEFAULT_PASS
               value: "guest"
-          # Quitamos el volumen temporalmente para ver si arranca sin depender del disco de AWS
-          # volumeMounts:
-          #   - name: rabbitmq-data
-          #     mountPath: /var/lib/rabbitmq
-      # volumes:
-      #   - name: rabbitmq-data
-      #     emptyDir: {} # Esto usa memoria en lugar de disco persistente (más rápido para labs)

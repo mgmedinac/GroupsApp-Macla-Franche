@@ -17,7 +17,6 @@ spec:
         - name: wait-chat-db
           image: busybox:1.36
           command: ["sh", "-c", "until nc -z chat-db 5432; do echo waiting for chat-db; sleep 2; done"]
-        # Añadimos RabbitMQ que es vital para la comunicación
         - name: wait-rabbitmq
           image: busybox:1.36
           command: ["sh", "-c", "until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 2; done"]
@@ -28,7 +27,7 @@ spec:
           ports:
             - containerPort: 8002
           env:
-            # Añadimos las llaves para que pueda validar sesiones
+            
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:

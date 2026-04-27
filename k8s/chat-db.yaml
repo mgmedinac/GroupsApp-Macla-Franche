@@ -13,7 +13,7 @@ spec:
       labels:
         app: chat-db-replica
     spec:
-      # fsGroup asegura que el volumen sea propiedad del GID 999
+      
       securityContext:
         fsGroup: 999
         fsGroupChangePolicy: "Always"

@@ -9,7 +9,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
-    # --- NUEVAS ANOTACIONES PARA WEBSOCKETS ---
+    # ---  ANOTACIONES PARA WEBSOCKETS ---
     nginx.ingress.kubernetes.io/websocket-services: "chat-service"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"

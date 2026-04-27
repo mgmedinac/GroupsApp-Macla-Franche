@@ -52,7 +52,7 @@ def init_db():
 	)
 
 	connection.commit()
-	# Prevent stale online flags after service/container restarts.
+	
 	cursor.execute('UPDATE users SET online = FALSE WHERE online = TRUE')
 	connection.commit()
 	connection.close()
@@ -247,7 +247,7 @@ def login():
 				return jsonify({'error': 'Usuario no encontrado o contraseña incorrecta.'}), 401
 			return jsonify({'error': 'Usuario no encontrado o contraseña incorrecta.'}), 401
 
-		# Migrate legacy plaintext passwords to hash after successful login.
+		
 		try:
 			check_password_hash(user['password'], password)
 		except ValueError:
