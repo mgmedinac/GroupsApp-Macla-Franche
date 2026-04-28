@@ -68,9 +68,3 @@ bash scripts/release_rest_stack_eks.sh
 | Consul UI | http://localhost:8500 |
 
 ---
-
-## * NOTAS DE DISEÑO ARQUITECTÓNICO
-
-- **Citas Directas:** Se vincula cada componente con los requerimientos específicos del proyecto (ej. gRPC o MOM).
-- **Contexto Técnico:** Se justifica el uso de tecnologías como Consul para coordinación y gRPC para eficiencia interna.
-- **Jerarquía:** Estructura organizada para facilitar la revisión de la lógica de negocio antes que la infraestructura física.
